@@ -237,6 +237,24 @@ bin/rails c
 bin/rake task_name
 ```
 
+#### AI-native CLI (`gr`)
+
+Use `bin/gr` to query Gumroad API v2 with `gh api`-style ergonomics.
+
+```shell
+# Reads token from GUMROAD_ACCESS_TOKEN
+export GUMROAD_ACCESS_TOKEN=your_access_token
+
+# Fetch current user
+bin/gr api user
+
+# List sales with query params
+bin/gr api sales -f after=2026-03-01 -f email=buyer@example.com
+
+# Update a resource with a non-GET method
+bin/gr api sales/SALE_ID -X PUT -f tracking_url=https://carrier.example/track
+```
+
 ### Linting
 
 We use ESLint for JS, and Rubocop for Ruby. Your editor should support displaying and fixing issues reported by these inline, and CI will automatically check and fix (if possible) these.
