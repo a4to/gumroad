@@ -1882,10 +1882,11 @@ describe User, :vcr do
         expect(@user.reload.comments.count).to eq(2)
       end
 
-      it "does not suspend all the others sellers accounts if suspended for tos violation" do
+      it "does not suspend related seller accounts for fraud if suspended for tos violation, and probates them instead", :sidekiq_inline do
         @user.flag_for_tos_violation(author_id: @admin_user.id, product_id: @product_1.id)
         @user.suspend_for_tos_violation(author_id: @admin_user.id)
         expect(@user_2.reload.suspended?).to be(false)
+        expect(@user_2.reload.on_probation?).to be(true)
       end
 
       it "re-enables all the sellers related accounts if the seller is marked compliant" do

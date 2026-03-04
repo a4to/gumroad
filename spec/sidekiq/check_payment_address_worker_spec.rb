@@ -23,6 +23,16 @@ describe CheckPaymentAddressWorker do
       expect(@user.reload.flagged?).to be(true)
     end
 
+    it "puts the user on probation if a suspended_for_tos_violation user has the same payment address" do
+      suspended_for_tos_user = create(:user, user_risk_state: "suspended_for_tos_violation", payment_address: "tosuser@gmail.com")
+      @user = create(:user, payment_address: "tosuser@gmail.com")
+
+      CheckPaymentAddressWorker.new.perform(@user.id)
+
+      expect(@user.reload.on_probation?).to be(true)
+      expect(@user.comments.last.content).to eq("Probated (payouts suspended) automatically on #{Time.current.to_fs(:formatted_date_full_month)} because this account matches payout details of User##{suspended_for_tos_user.id} (UID: #{suspended_for_tos_user.external_id}) suspended for a policy violation")
+    end
+
     it "flags the user for fraud if a blocked email object exists for their payment address" do
       @user = create(:user, payment_address: "fraudulent_email@zombo.com")
 
@@ -57,7 +67,7 @@ describe CheckPaymentAddressWorker do
       expect(user.reload.flagged?).to be(true)
     end
 
-    it "flags the user for fraud if a suspended_for_tos_violation user has the same stripe fingerprint" do
+    it "puts the user on probation if a suspended_for_tos_violation user has the same stripe fingerprint" do
       suspended_user = create(:user, user_risk_state: "suspended_for_tos_violation")
       create(:ach_account, user: suspended_user, stripe_fingerprint: "same_fingerprint_456")
 
@@ -66,7 +76,8 @@ describe CheckPaymentAddressWorker do
 
       CheckPaymentAddressWorker.new.perform(user.id)
 
-      expect(user.reload.flagged?).to be(true)
+      expect(user.reload.on_probation?).to be(true)
+      expect(user.comments.last.content).to eq("Probated (payouts suspended) automatically on #{Time.current.to_fs(:formatted_date_full_month)} because this account matches payout details of User##{suspended_user.id} (UID: #{suspended_user.external_id}) suspended for a policy violation")
     end
 
     it "flags the user for fraud if a blocked fingerprint object exists" do

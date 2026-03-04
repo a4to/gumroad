@@ -4,7 +4,7 @@ describe SuspendAccountsWithPaymentAddressWorker do
   describe "#perform" do
     context "with payment address" do
       before do
-        @user = create(:user, payment_address: "sameuser@paypal.com")
+        @user = create(:user, payment_address: "sameuser@paypal.com", user_risk_state: "suspended_for_fraud")
         @user_2 = create(:user, payment_address: "sameuser@paypal.com")
         create(:user) # admin user
       end
@@ -30,7 +30,7 @@ describe SuspendAccountsWithPaymentAddressWorker do
 
     context "with stripe fingerprint" do
       before do
-        @user = create(:user)
+        @user = create(:user, user_risk_state: "suspended_for_fraud")
         @user_2 = create(:user)
         @user_3 = create(:user)
 
@@ -112,7 +112,7 @@ describe SuspendAccountsWithPaymentAddressWorker do
 
     context "with both payment address and stripe fingerprint" do
       before do
-        @user = create(:user, payment_address: "sameuser@paypal.com")
+        @user = create(:user, payment_address: "sameuser@paypal.com", user_risk_state: "suspended_for_fraud")
         @user_paypal_match = create(:user, payment_address: "sameuser@paypal.com")
         @user_fingerprint_match = create(:user)
 
@@ -125,6 +125,38 @@ describe SuspendAccountsWithPaymentAddressWorker do
 
         expect(@user_paypal_match.reload.suspended?).to be(true)
         expect(@user_fingerprint_match.reload.suspended?).to be(true)
+      end
+    end
+
+    context "when source account is suspended for TOS violation with payment address" do
+      before do
+        @user = create(:user, payment_address: "sameuser@paypal.com", user_risk_state: "suspended_for_tos_violation")
+        @user_2 = create(:user, payment_address: "sameuser@paypal.com")
+      end
+
+      it "puts related accounts on probation instead of suspending for fraud" do
+        described_class.new.perform(@user.id)
+
+        expect(@user_2.reload.on_probation?).to be(true)
+        expect(@user_2.reload.suspended?).to be(false)
+        expect(@user_2.comments.last.content).to eq("Probated (payouts suspended) automatically on #{Time.current.to_fs(:formatted_date_full_month)} because this account uses payment address #{@user.payment_address}, which matches User##{@user.id} (UID: #{@user.external_id}) suspended for a policy violation")
+      end
+    end
+
+    context "when source account is suspended for TOS violation with stripe fingerprint" do
+      before do
+        @user = create(:user, user_risk_state: "suspended_for_tos_violation")
+        @user_2 = create(:user)
+        create(:ach_account, user: @user, stripe_fingerprint: "same_fingerprint_123")
+        create(:ach_account, user: @user_2, stripe_fingerprint: "same_fingerprint_123")
+      end
+
+      it "puts related accounts on probation using fingerprint details" do
+        described_class.new.perform(@user.id)
+
+        expect(@user_2.reload.on_probation?).to be(true)
+        expect(@user_2.reload.suspended?).to be(false)
+        expect(@user_2.comments.last.content).to eq("Probated (payouts suspended) automatically on #{Time.current.to_fs(:formatted_date_full_month)} because this account uses bank account fingerprint same_fingerprint_123, which matches User##{@user.id} (UID: #{@user.external_id}) suspended for a policy violation")
       end
     end
   end
